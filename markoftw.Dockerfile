@@ -17,10 +17,10 @@ ENV VERSION_GIT_HASH=$VERSION_GIT_HASH
 ARG TARGETARCH
 
 RUN go install -tags=xversion -ldflags="\
-      -X tailscale.com/version.Long=$VERSION_LONG \
-      -X tailscale.com/version.Short=$VERSION_SHORT \
-      -X tailscale.com/version.GitCommit=$VERSION_GIT_HASH" \
-      -v ./cmd/tailscale ./cmd/tailscaled
+      -X tailscale.com/version.longStamp=$VERSION_LONG \
+      -X tailscale.com/version.shortStamp=$VERSION_SHORT \
+      -X tailscale.com/version.gitCommitStamp=$VERSION_GIT_HASH" \
+      -v ./cmd/tailscale ./cmd/tailscaled ./cmd/containerboot
 
 FROM alpine:3.18
 RUN apk add --no-cache ca-certificates iptables iproute2 ip6tables iputils
