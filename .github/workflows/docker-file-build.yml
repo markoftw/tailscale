@@ -40,7 +40,11 @@ jobs:
       uses: docker/build-push-action@v5
       with:
         context: .
-        file: ./Dockerfile.markoftw
+        file: ./markoftw.Dockerfile
         platforms: linux/amd64
         push: true
         tags: ${{ steps.tags_meta.outputs.tags }}
+        build-args:
+          VERSION_SHORT=${{ steps.tailscale_version.outputs.app_version }}
+          VERSION_LONG=${{ steps.tailscale_version.outputs.app_version }}-long
+          VERSION_GIT_HASH=${{ github.sha }}
