@@ -353,9 +353,13 @@ func (pm *profileManager) loadSavedPrefs(key ipn.StateKey) (ipn.PrefsView, error
 	if err != nil {
 		return ipn.PrefsView{}, err
 	}
-	savedPrefs, err := ipn.PrefsFromBytes(bs)
-	if err != nil {
-		return ipn.PrefsView{}, fmt.Errorf("PrefsFromBytes: %v", err)
+	savedPrefs := ipn.NewPrefs()
+	// NewPrefs sets a default NoStatefulFiltering, but we want to actually see
+	// if the saved state had an empty value. The empty value gets migrated
+	// based on NoSNAT, while a default "false" does not.
+	savedPrefs.NoStatefulFiltering = ""
+	if err := ipn.PrefsFromBytes(bs, savedPrefs); err != nil {
+		return ipn.PrefsView{}, fmt.Errorf("parsing saved prefs: %v", err)
 	}
 	pm.logf("using backend prefs for %q: %v", key, savedPrefs.Pretty())
 
@@ -371,12 +375,39 @@ func (pm *profileManager) loadSavedPrefs(key ipn.StateKey) (ipn.PrefsView, error
 	// https://github.com/tailscale/tailscale/pull/11814/commits/1613b18f8280c2bce786980532d012c9f0454fa2#diff-314ba0d799f70c8998940903efb541e511f352b39a9eeeae8d475c921d66c2ac
 	// prefs could set AutoUpdate.Apply=true via EditPrefs or tailnet
 	// auto-update defaults. After that change, such value is "invalid" and
-	// cause any EditPrefs calls to fail (other than disabling autp-updates).
+	// cause any EditPrefs calls to fail (other than disabling auto-updates).
 	//
 	// Reset AutoUpdate.Apply if we detect such invalid prefs.
 	if savedPrefs.AutoUpdate.Apply.EqualBool(true) && !clientupdate.CanAutoUpdate() {
 		savedPrefs.AutoUpdate.Apply.Clear()
 	}
+
+	// Backfill a missing NoStatefulFiltering field based on the value of
+	// the NoSNAT field; we want to apply stateful filtering in all cases
+	// *except* where the user has disabled SNAT.
+	//
+	// Only backfill if the user hasn't set a value for
+	// NoStatefulFiltering, however.
+	_, haveNoStateful := savedPrefs.NoStatefulFiltering.Get()
+	if !haveNoStateful {
+		if savedPrefs.NoSNAT {
+			pm.logf("backfilling NoStatefulFiltering field to true because NoSNAT is set")
+
+			// No SNAT: no stateful filtering
+			savedPrefs.NoStatefulFiltering.Set(true)
+		} else {
+			pm.logf("backfilling NoStatefulFiltering field to false because NoSNAT is not set")
+
+			// SNAT (default): apply stateful filtering
+			savedPrefs.NoStatefulFiltering.Set(false)
+		}
+
+		// Write back to the preferences store now that we've updated it.
+		if err := pm.writePrefsToStore(key, savedPrefs.View()); err != nil {
+			return ipn.PrefsView{}, err
+		}
+	}
+
 	return savedPrefs.View(), nil
 }
 

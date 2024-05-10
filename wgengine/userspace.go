@@ -47,6 +47,7 @@ import (
 	"tailscale.com/util/deephash"
 	"tailscale.com/util/mak"
 	"tailscale.com/util/set"
+	"tailscale.com/util/testenv"
 	"tailscale.com/version"
 	"tailscale.com/wgengine/capture"
 	"tailscale.com/wgengine/filter"
@@ -259,6 +260,10 @@ func NewFakeUserspaceEngine(logf logger.Logf, opts ...any) (Engine, error) {
 func NewUserspaceEngine(logf logger.Logf, conf Config) (_ Engine, reterr error) {
 	var closePool closeOnErrorPool
 	defer closePool.closeAllIfError(&reterr)
+
+	if testenv.InTest() && conf.HealthTracker == nil {
+		panic("NewUserspaceEngine called without HealthTracker (being strict in tests)")
+	}
 
 	if conf.Tun == nil {
 		logf("[v1] using fake (no-op) tun device")
@@ -1035,6 +1040,14 @@ func (e *userspaceEngine) GetFilter() *filter.Filter {
 
 func (e *userspaceEngine) SetFilter(filt *filter.Filter) {
 	e.tundev.SetFilter(filt)
+}
+
+func (e *userspaceEngine) GetJailedFilter() *filter.Filter {
+	return e.tundev.GetJailedFilter()
+}
+
+func (e *userspaceEngine) SetJailedFilter(filt *filter.Filter) {
+	e.tundev.SetJailedFilter(filt)
 }
 
 func (e *userspaceEngine) SetStatusCallback(cb StatusCallback) {
